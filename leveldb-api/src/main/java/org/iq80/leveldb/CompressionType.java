@@ -28,7 +28,11 @@ public enum CompressionType
     // NOTE: do not change the values of existing entries, as these are
     // part of the persistent format on disk.
     NONE(0x00),
-    SNAPPY(0x01);
+    SNAPPY(0x01),
+    ZLIB(0x02),
+    ZOPFLI(0x02), //Same as ZLib since it is a replacement
+    ZSTD(0x03),
+    ZLIB_RAW(0x04);
 
     public static CompressionType getCompressionTypeByPersistentId(int persistentId)
     {

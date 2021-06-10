@@ -24,7 +24,10 @@ import org.iq80.leveldb.util.PureJavaCrc32C;
 import org.iq80.leveldb.util.Slice;
 import org.iq80.leveldb.util.Slices;
 import org.iq80.leveldb.util.Snappy;
+import org.iq80.leveldb.util.Zlib;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.Charset;
 
@@ -191,20 +194,50 @@ public class TableBuilder
         // attempt to compress the block
         Slice blockContents = raw;
         CompressionType blockCompressionType = CompressionType.NONE;
-        if (compressionType == CompressionType.SNAPPY) {
-            ensureCompressedOutputCapacity(maxCompressedLength(raw.length()));
-            try {
-                int compressedSize = Snappy.compress(raw.getRawArray(), raw.getRawOffset(), raw.length(), compressedOutput.getRawArray(), 0);
+        ByteArrayOutputStream compressedOutputStream = new ByteArrayOutputStream();
+        switch(compressionType){
+            case SNAPPY:
+                ensureCompressedOutputCapacity(maxCompressedLength(raw.length()));
+                try {
+                    int compressedSize = Snappy.compress(raw.getRawArray(), raw.getRawOffset(), raw.length(), compressedOutput.getRawArray(), 0);
 
-                // Don't use the compressed data if compressed less than 12.5%,
-                if (compressedSize < raw.length() - (raw.length() / 8)) {
-                    blockContents = compressedOutput.slice(0, compressedSize);
-                    blockCompressionType = CompressionType.SNAPPY;
+                    // Don't use the compressed data if compressed less than 12.5%,
+                    if (compressedSize < raw.length() - (raw.length() / 8)) {
+                        blockContents = compressedOutput.slice(0, compressedSize);
+                        blockCompressionType = CompressionType.SNAPPY;
+                    }
                 }
-            }
-            catch (IOException ignored) {
-                // compression failed, so just store uncompressed form
-            }
+                catch (IOException ignored) {
+                    // compression failed, so just store uncompressed form
+                }
+                break;
+            case ZLIB:
+            case ZOPFLI:
+            case ZLIB_RAW:
+                boolean isRaw = false;
+                if (compressionType == CompressionType.ZLIB_RAW) {
+                    isRaw = true;
+                }
+                try {
+                    ByteArrayInputStream input = new ByteArrayInputStream(raw.getRawArray(), raw.getRawOffset(), raw.length());
+
+                    int compressedSize = Zlib.compress(input, compressedOutputStream, isRaw);
+                    byte[] output = compressedOutputStream.toByteArray();
+                    compressedOutputStream.reset();
+                    // Don't use the compressed data if compressed less than 12.5%,
+                    if (compressedSize < raw.length() - (raw.length() / 8)) {
+                        blockContents = Slices.wrappedBuffer(output);
+                        blockCompressionType = compressionType;
+                    }
+                }
+                catch (IOException ignored) {
+                    // compression failed, so just store uncompressed form
+                }
+                break;
+            case ZSTD:
+                //TODO: Support ZSTD compression
+            case NONE:
+                break;
         }
 
         // create block trailer
