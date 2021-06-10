@@ -18,6 +18,7 @@
 package org.iq80.leveldb.impl;
 
 import com.google.common.base.Strings;
+import com.google.common.primitives.UnsignedLong;
 import org.iq80.leveldb.env.Env;
 import org.iq80.leveldb.env.File;
 
@@ -170,7 +171,7 @@ public final class Filename
      */
     private static long parseLong(String str)
     {
-        return Long.parseLong(str, 10);
+        return UnsignedLong.valueOf(str, 10).longValue();
     }
 
     /**
@@ -228,7 +229,7 @@ public final class Filename
     private static String makeFileName(long number, String suffix)
     {
         requireNonNull(suffix, "suffix is null");
-        return String.format("%s.%s", Strings.padStart(Long.toString(number), 6, '0'), suffix);
+        return String.format("%s.%s", Strings.padStart(UnsignedLong.fromLongBits(number).toString(), 6, '0'), suffix);
     }
 
     private static String removePrefix(String value, String prefix)
@@ -304,7 +305,7 @@ public final class Filename
             StringBuilder sb = new StringBuilder();
             sb.append("FileInfo");
             sb.append("{fileType=").append(fileType);
-            sb.append(", fileNumber=").append(Long.toString(fileNumber));
+            sb.append(", fileNumber=").append(UnsignedLong.fromLongBits(fileNumber).toString());
             sb.append('}');
             return sb.toString();
         }
