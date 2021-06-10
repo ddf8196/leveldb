@@ -73,6 +73,9 @@
         <air.check.skip-duplicate-finder>true</air.check.skip-duplicate-finder>
 
         <air.javadoc.lint>-missing</air.javadoc.lint>
+
+        <dep.guava.version>26.0-android</dep.guava.version>
+        <project.build.targetJdk>1.7</project.build.targetJdk>
     </properties>
 
     <dependencyManagement>
@@ -102,6 +105,7 @@
                 <artifactId>coveralls-maven-plugin</artifactId>
                 <version>4.3.0</version>
                 <configuration>
+                    <!--suppress UnresolvedMavenProperty -->
                     <repoToken>${converallstoken}</repoToken>
                 </configuration>
             </plugin>

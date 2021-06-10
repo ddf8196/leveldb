@@ -17,20 +17,19 @@
  */
 package org.iq80.leveldb.memenv;
 
+import com.google.common.base.Optional;
 import org.iq80.leveldb.env.DbLock;
 import org.iq80.leveldb.env.File;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 class MemFs
 {
@@ -80,7 +79,11 @@ class MemFs
             if (!dirs.contains(file.getParentFile())) {
                 throw new IOException("Unable to create file " + file + ", parent directory does not exist");
             }
-            fileState = maps.computeIfAbsent(file, memFile -> new FileState());
+            fileState = maps.get(file);
+            if (fileState == null) {
+                fileState = new FileState();
+                maps.put(file, fileState);
+            }
         }
         return fileState;
     }
@@ -118,7 +121,7 @@ class MemFs
     public Optional<FileState> getFileState(MemFile file)
     {
         synchronized (lock) {
-            return Optional.ofNullable(maps.get(file));
+            return Optional.fromNullable(maps.get(file));
         }
     }
 
@@ -132,10 +135,29 @@ class MemFs
     public List<File> listFiles(MemFile memFile)
     {
         synchronized (lock) {
-            return children(memFile).collect(Collectors.toList());
+            //return children(memFile).collect(Collectors.toList());
+            String s = memFile.getPath() + SEPARATOR;
+            Set<MemFile> concat = new HashSet<>(maps.size() + dirs.size());
+            concat.addAll(maps.keySet());
+            concat.addAll(dirs);
+            Iterator<MemFile> iter = concat.iterator();
+            while (iter.hasNext()) {
+                if (!iter.next().getPath().startsWith(s)) {
+                    iter.remove();
+                }
+            }
+            List<File> result = new ArrayList<>();
+            for (MemFile e : concat) {
+                int i = e.getPath().indexOf(SEPARATOR, s.length());
+                File f = i >= 0 ? MemFile.createMemFile(this, e.getPath().substring(0, i)) : e;
+                if (!result.contains(f)) {
+                    result.add(f);
+                }
+            }
+            return result;
         }
     }
-
+    /*
     private Stream<MemFile> children(MemFile memFile)
     {
         String s = memFile.getPath() + SEPARATOR;
@@ -147,6 +169,7 @@ class MemFs
             })
             .distinct();
     }
+    */
 
     public boolean renameTo(MemFile from, MemFile dest)
     {

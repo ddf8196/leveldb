@@ -17,15 +17,25 @@
  */
 package org.iq80.leveldb.util;
 
-import java.time.LocalDateTime;
-import java.util.function.Supplier;
+import com.google.common.base.Supplier;
+
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 public final class LogMessageFormatter
 {
     private static final int DATE_SIZE = 28;
-    private final Supplier<LocalDateTime> clock;
+    private final Supplier<Date> clock;
+    private final ThreadLocal<SimpleDateFormat> sdfThreadLocal = new ThreadLocal<SimpleDateFormat>()
+    {
+        @Override
+        protected SimpleDateFormat initialValue()
+        {
+            return new SimpleDateFormat("yyyy-MM-DD HH:mm:ss");
+        }
+    };
 
-    public LogMessageFormatter(Supplier<LocalDateTime> clock)
+    public LogMessageFormatter(Supplier<Date> clock)
     {
         this.clock = clock;
     }
@@ -33,7 +43,7 @@ public final class LogMessageFormatter
     public String format(String message)
     {
         final StringBuilder sb = new StringBuilder(message.length() + DATE_SIZE);
-        sb.append(clock.get());
+        sb.append(sdfThreadLocal.get().format(clock.get()));
         sb.append(' ');
         sb.append(message);
         return sb.toString();

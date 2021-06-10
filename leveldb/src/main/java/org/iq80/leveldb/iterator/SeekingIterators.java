@@ -17,13 +17,13 @@
  */
 package org.iq80.leveldb.iterator;
 
+import com.google.common.base.Function;
 import org.iq80.leveldb.impl.InternalKey;
 import org.iq80.leveldb.util.Slice;
 
 import java.io.Closeable;
 import java.util.Comparator;
 import java.util.List;
-import java.util.function.Function;
 
 /**
  * When ever possible a specific interface implementation is created for speed purpose.

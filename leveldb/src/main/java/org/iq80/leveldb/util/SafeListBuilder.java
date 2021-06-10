@@ -43,7 +43,7 @@ public final class SafeListBuilder<T extends Closeable> implements Closeable
      */
     public static final <T extends Closeable> SafeListBuilder<T> builder()
     {
-        return new SafeListBuilder<>(ImmutableList.builder());
+        return new SafeListBuilder<>(ImmutableList.<T>builder());
     }
 
     /**

@@ -35,7 +35,14 @@ import static com.google.common.base.Preconditions.checkArgument;
  */
 final class InternalFilterPolicy implements org.iq80.leveldb.table.FilterPolicy
 {
-    private static final Function<Slice, Slice> EXTRACT_USER_KEY = InternalFilterPolicy::extractUserKey;
+    private static final Function<Slice, Slice> EXTRACT_USER_KEY = new Function<Slice, Slice>()
+    {
+        @Override
+        public Slice apply(Slice slice)
+        {
+            return InternalFilterPolicy.extractUserKey(slice);
+        }
+    };
     private org.iq80.leveldb.table.FilterPolicy userPolicy;
 
     private InternalFilterPolicy(org.iq80.leveldb.table.FilterPolicy userPolicy)

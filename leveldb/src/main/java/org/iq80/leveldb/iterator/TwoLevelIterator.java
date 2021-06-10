@@ -17,11 +17,11 @@
  */
 package org.iq80.leveldb.iterator;
 
+import com.google.common.base.Function;
 import org.iq80.leveldb.DBException;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.function.Function;
 
 /**
  * Equivalent to TwoLevelIterator int google leveldb

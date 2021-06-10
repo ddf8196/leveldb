@@ -19,6 +19,8 @@ package org.iq80.leveldb.env;
 
 import org.iq80.leveldb.Logger;
 
+import java.io.IOException;
+
 public class NoOpLogger implements Logger
 {
     @Override
@@ -31,5 +33,11 @@ public class NoOpLogger implements Logger
     public void log(String message, Object... args)
     {
         /* no op */
+    }
+
+    @Override
+    public void close()
+            throws IOException
+    {
     }
 }

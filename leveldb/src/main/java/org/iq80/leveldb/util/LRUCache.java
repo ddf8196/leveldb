@@ -22,6 +22,7 @@ import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.Weigher;
 
+import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 
@@ -59,9 +60,11 @@ public final class LRUCache<K, V>
     @Override
     public long getApproximateMemoryUsage()
     {
-        return cache.asMap().entrySet().stream()
-                .mapToLong(e -> weigher.weigh(e.getKey(), e.getValue()))
-                .sum();
+        long result = 0;
+        for (Map.Entry<K, V> e : cache.asMap().entrySet()) {
+            result += weigher.weigh(e.getKey(), e.getValue());
+        }
+        return result;
     }
 
     @Override

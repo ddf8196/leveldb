@@ -25,7 +25,6 @@ import java.io.IOException;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
-import static java.lang.Long.parseUnsignedLong;
 import static java.util.Objects.requireNonNull;
 
 public final class Filename
@@ -171,7 +170,7 @@ public final class Filename
      */
     private static long parseLong(String str)
     {
-        return parseUnsignedLong(str, 10);
+        return Long.parseLong(str, 10);
     }
 
     /**
@@ -229,7 +228,7 @@ public final class Filename
     private static String makeFileName(long number, String suffix)
     {
         requireNonNull(suffix, "suffix is null");
-        return String.format("%s.%s", Strings.padStart(Long.toUnsignedString(number), 6, '0'), suffix);
+        return String.format("%s.%s", Strings.padStart(Long.toString(number), 6, '0'), suffix);
     }
 
     private static String removePrefix(String value, String prefix)
@@ -305,7 +304,7 @@ public final class Filename
             StringBuilder sb = new StringBuilder();
             sb.append("FileInfo");
             sb.append("{fileType=").append(fileType);
-            sb.append(", fileNumber=").append(Long.toUnsignedString(fileNumber));
+            sb.append(", fileNumber=").append(Long.toString(fileNumber));
             sb.append('}');
             return sb.toString();
         }

@@ -18,6 +18,7 @@
 package org.iq80.leveldb.impl;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Function;
 import org.iq80.leveldb.DBException;
 import org.iq80.leveldb.ReadOptions;
 import org.iq80.leveldb.iterator.SeekingIterator;
@@ -28,6 +29,7 @@ import org.iq80.leveldb.iterator.MergingIterator;
 import org.iq80.leveldb.util.SafeListBuilder;
 import org.iq80.leveldb.util.Slice;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -43,7 +45,14 @@ import static org.iq80.leveldb.impl.ValueType.VALUE;
 // todo this class should be immutable
 public class Level
 {
-    public static final Comparator<FileMetaData> NEWEST_FIRST = (fileMetaData, fileMetaData1) -> (int) (fileMetaData1.getNumber() - fileMetaData.getNumber());
+    public static final Comparator<FileMetaData> NEWEST_FIRST = new Comparator<FileMetaData>()
+    {
+        @Override
+        public int compare(FileMetaData fileMetaData, FileMetaData fileMetaData1)
+        {
+            return (int) (fileMetaData1.getNumber() - fileMetaData.getNumber());
+        }
+    };
     private final int levelNumber;
     private final TableCache tableCache;
     private final InternalKeyComparator internalKeyComparator;
@@ -87,18 +96,48 @@ public class Level
         }
     }
 
-    public static InternalIterator createLevelConcatIterator(TableCache tableCache, List<FileMetaData> files, InternalKeyComparator internalKeyComparator, ReadOptions options)
+    public static InternalIterator createLevelConcatIterator(final TableCache tableCache, List<FileMetaData> files, InternalKeyComparator internalKeyComparator, final ReadOptions options)
     {
-        SeekingIterator<InternalKey, FileMetaData> iterator = SeekingIterators.fromSortedList(files, FileMetaData::getLargest, f -> f, internalKeyComparator);
-        return SeekingIterators.twoLevelInternalIterator(iterator, fileMetaData -> {
-            try {
-                return tableCache.newIterator(fileMetaData, options);
-            }
-            catch (IOException e) {
-                throw new DBException(e);
-            }
-        }, () -> {
-        });
+        SeekingIterator<InternalKey, FileMetaData> iterator = SeekingIterators.fromSortedList(files,
+                new Function<FileMetaData, InternalKey>()
+                {
+                    @Override
+                    public InternalKey apply(FileMetaData fileMetaData)
+                    {
+                        return fileMetaData.getLargest();
+                    }
+                },
+                new Function<FileMetaData, FileMetaData>()
+                {
+                    @Override
+                    public FileMetaData apply(FileMetaData f)
+                    {
+                        return f;
+                    }
+                }, internalKeyComparator);
+
+        return SeekingIterators.twoLevelInternalIterator(iterator,
+                new Function<FileMetaData, SeekingIterator<InternalKey, Slice>>()
+                {
+                    @Override
+                    public SeekingIterator<InternalKey, Slice> apply(FileMetaData fileMetaData)
+                    {
+                        try {
+                            return tableCache.newIterator(fileMetaData, options);
+                        }
+                        catch (IOException e) {
+                            throw new DBException(e);
+                        }
+                    }
+                },
+                new Closeable()
+                {
+                    @Override
+                    public void close()
+                            throws IOException
+                    {
+                    }
+                });
     }
 
     public LookupResult get(ReadOptions options, LookupKey key, ReadStats readStats, ReadStats lasReadFile)
@@ -145,7 +184,7 @@ public class Level
             if (fileMetaDataList.isEmpty()) {
                 return Collections.emptyList();
             }
-            fileMetaDataList.sort(NEWEST_FIRST);
+            Collections.sort(fileMetaDataList, NEWEST_FIRST);
             return fileMetaDataList;
         }
         else {

@@ -17,9 +17,12 @@
  */
 package org.iq80.leveldb.table;
 
+import com.google.common.base.Function;
 import com.google.common.base.Throwables;
+import org.iq80.leveldb.CompressionType;
 import org.iq80.leveldb.DBException;
 import org.iq80.leveldb.ReadOptions;
+import org.iq80.leveldb.iterator.SeekingIterator;
 import org.iq80.leveldb.iterator.SeekingIterators;
 import org.iq80.leveldb.iterator.SliceIterator;
 import org.iq80.leveldb.util.ILRUCache;
@@ -29,13 +32,17 @@ import org.iq80.leveldb.util.Slice;
 import org.iq80.leveldb.util.Slices;
 import org.iq80.leveldb.util.Snappy;
 import org.iq80.leveldb.util.VariableLengthQuantity;
+import org.iq80.leveldb.util.Zlib;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Comparator;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -107,11 +114,25 @@ public final class Table
         return new FilterBlockReader(filterPolicy, filterBlock);
     }
 
-    public SliceIterator iterator(ReadOptions options)
+    public SliceIterator iterator(final ReadOptions options)
     {
         assert refCount.get() > 0;
         this.retain();
-        return SeekingIterators.twoLevelSliceIterator(indexBlock.iterator(), blockHandle -> openBlock(options, blockHandle), this::release);
+        return SeekingIterators.twoLevelSliceIterator(indexBlock.iterator(), new Function<Slice, SeekingIterator<Slice, Slice>>()
+        {
+            @Override
+            public SeekingIterator<Slice, Slice> apply(Slice blockHandle)
+            {
+                return openBlock(options, blockHandle);
+            }
+        }, new Closeable() {
+            @Override
+            public void close()
+                    throws IOException
+            {
+                Table.this.release();
+            }
+        });
     }
 
     private BlockIterator openBlock(ReadOptions options, Slice blockHandle)
@@ -140,7 +161,7 @@ public final class Table
         return dataBlock;
     }
 
-    private Block readBlock(BlockHandle blockHandle, ReadOptions options)
+    private Block readBlock(final BlockHandle blockHandle, final ReadOptions options)
             throws IOException
     {
         assert refCount.get() > 0;
@@ -159,7 +180,15 @@ public final class Table
                 }
             }
             else {
-                rawBlock = blockCache.load(new CacheKey(id, blockHandle), () -> readRawBlock(blockHandle, options.verifyChecksums()));
+                rawBlock = blockCache.load(new CacheKey(id, blockHandle), new Callable<Slice>()
+                {
+                    @Override
+                    public Slice call()
+                            throws Exception
+                    {
+                        return readRawBlock(blockHandle, options.verifyChecksums());
+                    }
+                });
             }
             return new Block(rawBlock, comparator);
         }
@@ -196,14 +225,37 @@ public final class Table
         Slice uncompressedData;
         content.position(position);
         content.limit(limit - BlockTrailer.ENCODED_LENGTH);
-        if (blockTrailer.getCompressionType() == SNAPPY) {
-            int uncompressedLength = uncompressedLength(content);
-            final ByteBuffer uncompressedScratch = ByteBuffer.allocateDirect(uncompressedLength);
-            Snappy.uncompress(content, uncompressedScratch);
-            uncompressedData = Slices.copiedBuffer(uncompressedScratch);
-        }
-        else {
-            uncompressedData = Slices.avoidCopiedBuffer(content);
+
+        switch(blockTrailer.getCompressionType()) {
+            case SNAPPY:
+                int uncompressedLength = uncompressedLength(content);
+                final ByteBuffer uncompressedScratch = ByteBuffer.allocateDirect(uncompressedLength);
+                Snappy.uncompress(content, uncompressedScratch);
+                uncompressedData = Slices.copiedBuffer(uncompressedScratch);
+                break;
+            case ZLIB:
+            case ZOPFLI:
+            case ZLIB_RAW:
+                boolean isRaw = false;
+                if (blockTrailer.getCompressionType() == CompressionType.ZLIB_RAW) {
+                    isRaw = true;
+                }
+
+                byte[] input = new byte[content.remaining()];
+                content.get(input);
+
+                ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+                Zlib.uncompress(new ByteArrayInputStream(input), outputStream, isRaw);
+
+                byte[] output = outputStream.toByteArray();
+
+                uncompressedData = Slices.wrappedBuffer(output);
+                break;
+            case ZSTD:
+                //TODO: Support ZSTD compression
+            case NONE:
+            default:
+                uncompressedData = Slices.avoidCopiedBuffer(content);
         }
 
         return uncompressedData;

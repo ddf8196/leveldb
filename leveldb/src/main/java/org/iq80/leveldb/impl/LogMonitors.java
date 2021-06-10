@@ -39,7 +39,7 @@ public final class LogMonitors
         };
     }
 
-    public static LogMonitor logMonitor(Logger logger)
+    public static LogMonitor logMonitor(final Logger logger)
     {
         return new LogMonitor()
         {

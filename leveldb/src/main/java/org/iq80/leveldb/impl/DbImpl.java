@@ -21,6 +21,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.common.io.Closer;
+import com.google.common.primitives.UnsignedLong;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.iq80.leveldb.CompressionType;
 import org.iq80.leveldb.DB;
@@ -59,10 +60,12 @@ import org.iq80.leveldb.util.SliceOutput;
 import org.iq80.leveldb.util.Slices;
 import org.iq80.leveldb.util.Snappy;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
@@ -78,7 +81,6 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
@@ -166,16 +168,21 @@ public class DbImpl
 
         ThreadFactory compactionThreadFactory = new ThreadFactoryBuilder()
                 .setNameFormat("leveldb-" + dbname + "-%s")
-                .setUncaughtExceptionHandler((t, e) -> {
-                    mutex.lock();
-                    try {
-                        if (backgroundException == null) {
-                            backgroundException = e;
+                .setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler()
+                {
+                    @Override
+                    public void uncaughtException(Thread t, Throwable e)
+                    {
+                        mutex.lock();
+                        try {
+                            if (backgroundException == null) {
+                                backgroundException = e;
+                            }
+                            options.logger().log("Unexpected exception occurred %s", e);
                         }
-                        options.logger().log("Unexpected exception occurred %s", e);
-                    }
-                    finally {
-                        mutex.unlock();
+                        finally {
+                            mutex.unlock();
+                        }
                     }
                 })
                 .build();
@@ -202,7 +209,15 @@ public class DbImpl
         try {
             // lock the database dir
             this.dbLock = env.tryLock(databaseDir.child(Filename.lockFileName()));
-            c.register(dbLock::release);
+            c.register(new Closeable()
+            {
+                @Override
+                public void close()
+                        throws IOException
+                {
+                    dbLock.release();
+                }
+            });
             //<editor-fold desc="Recover">
             // verify the "current" file
             File currentFile = databaseDir.child(Filename.currentFileName());
@@ -215,7 +230,15 @@ public class DbImpl
             }
 
             this.versions = new VersionSet(options, databaseDir, tableCache, internalKeyComparator, env);
-            c.register(versions::release);
+            c.register(new Closeable()
+            {
+                @Override
+                public void close()
+                        throws IOException
+                {
+                    versions.release();
+                }
+            });
             // load  (and recover) current version
             boolean saveManifest = versions.recover();
 
@@ -228,7 +251,12 @@ public class DbImpl
             // produced by an older version of leveldb.
             long minLogNumber = versions.getLogNumber();
             long previousLogNumber = versions.getPrevLogNumber();
-            final Set<Long> expected = versions.getLiveFiles().stream().map(FileMetaData::getNumber).collect(Collectors.toSet());
+            List<FileMetaData> liveFiles = versions.getLiveFiles();
+
+            final Set<Long> expected = new HashSet<>(liveFiles.size());
+            for (FileMetaData fileMetaData : liveFiles) {
+                expected.add(fileMetaData.getNumber());
+            }
             List<File> filenames = databaseDir.listFiles();
 
             List<Long> logs = new ArrayList<>();
@@ -444,7 +472,7 @@ public class DbImpl
                 if (immutableMemTable != null) {
                     sizeTotal += immutableMemTable.approximateMemoryUsage();
                 }
-                return Long.toUnsignedString(sizeTotal);
+                return UnsignedLong.fromLongBits(sizeTotal).toString();
             }
         }
         finally {
@@ -513,7 +541,9 @@ public class DbImpl
         // are therefore safe to delete while allowing other threads to proceed.
         mutex.unlock();
         try {
-            filesToDelete.forEach(File::delete);
+            for (File file : filesToDelete) {
+                file.delete();
+            }
         }
         finally {
             mutex.lock();
@@ -539,7 +569,14 @@ public class DbImpl
             // No work to be done
         }
         else {
-            backgroundCompaction = compactionExecutor.submit(this::backgroundCall);
+            backgroundCompaction = compactionExecutor.submit(new Runnable()
+            {
+                @Override
+                public void run()
+                {
+                    backgroundCall();
+                }
+            });
         }
     }
 
@@ -1105,16 +1142,21 @@ public class DbImpl
             if (immutableMemTable != null) {
                 builder.add(immutableMemTable.iterator());
             }
-            Version current = versions.getCurrent();
+            final Version current = versions.getCurrent();
             builder.addAll(current.getLevelIterators(options));
             current.retain();
-            return new DbIterator(new MergingIterator(builder.build(), internalKeyComparator), () -> {
-                mutex.lock();
-                try {
-                    current.release();
-                }
-                finally {
-                    mutex.unlock();
+            return new DbIterator(new MergingIterator(builder.build(), internalKeyComparator), new Runnable()
+            {
+                @Override
+                public void run()
+                {
+                    mutex.lock();
+                    try {
+                        current.release();
+                    }
+                    finally {
+                        mutex.unlock();
+                    }
                 }
             });
         }
@@ -1799,17 +1841,21 @@ public class DbImpl
     public void suspendCompactions()
             throws InterruptedException
     {
-        compactionExecutor.execute(() -> {
-            try {
-                synchronized (suspensionMutex) {
-                    suspensionCounter++;
-                    suspensionMutex.notifyAll();
-                    while (suspensionCounter > 0 && !compactionExecutor.isShutdown()) {
-                        suspensionMutex.wait(500);
+        compactionExecutor.execute(new Runnable() {
+            @Override
+            public void run()
+            {
+                try {
+                    synchronized (suspensionMutex) {
+                        suspensionCounter++;
+                        suspensionMutex.notifyAll();
+                        while (suspensionCounter > 0 && !compactionExecutor.isShutdown()) {
+                            suspensionMutex.wait(500);
+                        }
                     }
                 }
-            }
-            catch (InterruptedException e) {
+                catch (InterruptedException e) {
+                }
             }
         });
         synchronized (suspensionMutex) {

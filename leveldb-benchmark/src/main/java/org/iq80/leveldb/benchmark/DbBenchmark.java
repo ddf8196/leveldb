@@ -139,7 +139,15 @@ public class DbBenchmark
 
             if (benchmark.equals("open")) {
                 freshBb = true;
-                method = this::openBench;
+                method = new BenchmarkMethod()
+                {
+                    @Override
+                    public void run(ThreadState state)
+                            throws Exception
+                    {
+                        openBench(state);
+                    }
+                };
                 num /= 10000;
                 if (num < 1) {
                     num = 1;
@@ -147,89 +155,243 @@ public class DbBenchmark
             }
             else if (benchmark.equals("fillseq")) {
                 freshBb = true;
-                method = this::writeSeq;
+                method = new BenchmarkMethod() {
+                    @Override
+                    public void run(ThreadState state)
+                            throws Exception
+                    {
+                        writeSeq(state);
+                    }
+                };
             }
             else if (benchmark.equals("fillbatch")) {
                 freshBb = true;
                 entriesPerBatch = 1000;
-                method = this::writeSeq;
+                method = new BenchmarkMethod() {
+                    @Override
+                    public void run(ThreadState state)
+                            throws Exception
+                    {
+                        writeSeq(state);
+                    }
+                };
             }
             else if (benchmark.equals("fillrandom")) {
                 freshBb = true;
-                method = this::writeRandom;
+                method = new BenchmarkMethod() {
+                    @Override
+                    public void run(ThreadState state)
+                            throws Exception
+                    {
+                        writeRandom(state);
+                    }
+                };
             }
             else if (benchmark.equals("overwrite")) {
                 freshBb = false;
-                method = this::writeRandom;
+                method = new BenchmarkMethod() {
+                    @Override
+                    public void run(ThreadState state)
+                            throws Exception
+                    {
+                        writeRandom(state);
+                    }
+                };
             }
             else if (benchmark.equals("fillsync")) {
                 freshBb = true;
                 num /= 1000;
                 writeOptions.sync(true);
-                method = this::writeRandom;
+                method = new BenchmarkMethod() {
+                    @Override
+                    public void run(ThreadState state)
+                            throws Exception
+                    {
+                        writeRandom(state);
+                    }
+                };
             }
             else if (benchmark.equals("fill100K")) {
                 freshBb = true;
                 num /= 1000;
                 valueSize = 100 * 1000;
-                method = this::writeRandom;
+                method = new BenchmarkMethod() {
+                    @Override
+                    public void run(ThreadState state)
+                            throws Exception
+                    {
+                        writeRandom(state);
+                    }
+                };
             }
             else if (benchmark.equals("readseq")) {
-                method = this::readSequential;
+                method = new BenchmarkMethod() {
+                    @Override
+                    public void run(ThreadState state)
+                            throws Exception
+                    {
+                        readSequential(state);
+                    }
+                };
             }
             else if (benchmark.equals("readreverse")) {
-                method = this::readReverse;
+                method = new BenchmarkMethod() {
+                    @Override
+                    public void run(ThreadState state)
+                            throws Exception
+                    {
+                        readReverse(state);
+                    }
+                };
             }
             else if (benchmark.equals("readrandom")) {
-                method = this::readRandom;
+                method = new BenchmarkMethod() {
+                    @Override
+                    public void run(ThreadState state)
+                            throws Exception
+                    {
+                        readRandom(state);
+                    }
+                };
             }
             else if (benchmark.equals("readmissing")) {
-                method = this::readMissing;
+                method = new BenchmarkMethod() {
+                    @Override
+                    public void run(ThreadState state)
+                            throws Exception
+                    {
+                        writeSeq(state);
+                    }
+                };
             }
             else if (benchmark.equals("seekrandom")) {
-                method = this::seekRandom;
+                method = new BenchmarkMethod() {
+                    @Override
+                    public void run(ThreadState state)
+                            throws Exception
+                    {
+                        seekRandom(state);
+                    }
+                };
             }
             else if (benchmark.equals("readhot")) {
-                method = this::readHot;
+                method = new BenchmarkMethod() {
+                    @Override
+                    public void run(ThreadState state)
+                            throws Exception
+                    {
+                        readHot(state);
+                    }
+                };
             }
             else if (benchmark.equals("readrandomsmall")) {
                 reads /= 1000;
-                method = this::readRandom;
+                method = new BenchmarkMethod() {
+                    @Override
+                    public void run(ThreadState state)
+                            throws Exception
+                    {
+                        readRandom(state);
+                    }
+                };
             }
             else if (benchmark.equals("deleteseq")) {
-                method = this::deleteSeq;
+                method = new BenchmarkMethod() {
+                    @Override
+                    public void run(ThreadState state)
+                            throws Exception
+                    {
+                        deleteSeq(state);
+                    }
+                };
             }
             else if (benchmark.equals("deleterandom")) {
-                method = this::deleteRandom;
+                method = new BenchmarkMethod() {
+                    @Override
+                    public void run(ThreadState state)
+                            throws Exception
+                    {
+                        deleteRandom(state);
+                    }
+                };
             }
             else if (benchmark.equals("readwhilewriting")) {
                 numThreads++;  // Add extra thread for writing
-                method = this::readWhileWriting;
+                method = new BenchmarkMethod() {
+                    @Override
+                    public void run(ThreadState state)
+                            throws Exception
+                    {
+                        readWhileWriting(state);
+                    }
+                };
             }
             else if (benchmark.equals("compact")) {
-                method = this::compact;
+                method = new BenchmarkMethod() {
+                    @Override
+                    public void run(ThreadState state)
+                            throws Exception
+                    {
+                        compact(state);
+                    }
+                };
             }
             else if (benchmark.equals("crc32c")) {
-                method = this::crc32c;
+                method = new BenchmarkMethod() {
+                    @Override
+                    public void run(ThreadState state)
+                            throws Exception
+                    {
+                        crc32c(state);
+                    }
+                };
             }
             else if (benchmark.equals("snappycomp")) {
                 if (Snappy.available()) {
-                    method = this::snappyCompress;
+                    method = new BenchmarkMethod() {
+                        @Override
+                        public void run(ThreadState state)
+                                throws Exception
+                        {
+                            snappyCompress(state);
+                        }
+                    };
                 }
             }
             else if (benchmark.equals("snappyuncomp")) {
                 if (Snappy.available()) {
-                    method = this::snappyUncompressDirectBuffer;
+                    method = new BenchmarkMethod() {
+                        @Override
+                        public void run(ThreadState state)
+                                throws Exception
+                        {
+                            snappyUncompressDirectBuffer(state);
+                        }
+                    };
                 }
             }
             else if (benchmark.equals("unsnap-array")) {
                 if (Snappy.available()) {
-                    method = this::snappyUncompressArray;
+                    method = new BenchmarkMethod() {
+                        @Override
+                        public void run(ThreadState state)
+                                throws Exception
+                        {
+                            snappyUncompressArray(state);
+                        }
+                    };
                 }
             }
             else if (benchmark.equals("unsnap-direct")) {
                 if (Snappy.available()) {
-                    method = this::snappyUncompressDirectBuffer;
+                    method = new BenchmarkMethod() {
+                        @Override
+                        public void run(ThreadState state)
+                                throws Exception
+                        {
+                            snappyUncompressDirectBuffer(state);
+                        }
+                    };
                 }
             }
             else if (benchmark.equals("heapprofile")) {
@@ -304,43 +466,48 @@ public class DbBenchmark
 
     public void startThread(final ThreadArg arg)
     {
-        new Thread(() -> {
-            SharedState shared = arg.shared;
-            ThreadState thread = arg.thread;
-            shared.mu.lock();
-            try {
-                shared.numInitialized++;
-                if (shared.numInitialized >= shared.total) {
-                    shared.cv.signalAll();
+        new Thread(new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                SharedState shared = arg.shared;
+                ThreadState thread = arg.thread;
+                shared.mu.lock();
+                try {
+                    shared.numInitialized++;
+                    if (shared.numInitialized >= shared.total) {
+                        shared.cv.signalAll();
+                    }
+                    while (!shared.start) {
+                        shared.cv.awaitUninterruptibly();
+                    }
                 }
-                while (!shared.start) {
-                    shared.cv.awaitUninterruptibly();
+                finally {
+                    shared.mu.unlock();
                 }
-            }
-            finally {
-                shared.mu.unlock();
-            }
-            try {
-                thread.stats.init();
-                arg.method.run(thread);
-            }
-            catch (Exception e) {
-                thread.stats.addMessage("ERROR " + e);
-                e.printStackTrace();
-            }
-            finally {
-                thread.stats.stop();
-            }
+                try {
+                    thread.stats.init();
+                    arg.method.run(thread);
+                }
+                catch (Exception e) {
+                    thread.stats.addMessage("ERROR " + e);
+                    e.printStackTrace();
+                }
+                finally {
+                    thread.stats.stop();
+                }
 
-            shared.mu.lock();
-            try {
-                shared.numDone++;
-                if (shared.numDone >= shared.total) {
-                    shared.cv.signalAll();
+                shared.mu.lock();
+                try {
+                    shared.numDone++;
+                    if (shared.numDone >= shared.total) {
+                        shared.cv.signalAll();
+                    }
                 }
-            }
-            finally {
-                shared.mu.unlock();
+                finally {
+                    shared.mu.unlock();
+                }
             }
         }).start();
     }
@@ -369,10 +536,10 @@ public class DbBenchmark
     {
         boolean assertsEnabled = false;
         // CHECKSTYLE IGNORE check FOR NEXT 1 LINES
-        assert assertsEnabled = true;  // Intentional side effect!!!
-        if (assertsEnabled) {
-            System.out.printf("WARNING: Assertions are enabled; benchmarks unnecessarily slow%n");
-        }
+        //assert assertsEnabled = true;  // Intentional side effect!!!
+        //if (assertsEnabled) {
+        //    System.out.printf("WARNING: Assertions are enabled; benchmarks unnecessarily slow%n");
+        //}
 
         // See if snappy is working by attempting to compress a compressible string
         String text = "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy";
@@ -527,7 +694,6 @@ public class DbBenchmark
 
     private void readMissing(ThreadState thread)
     {
-
         for (int i = 0; i < reads; i++) {
             byte[] key = formatNumber(thread.rand.nextInt(num));
             db.get(key);

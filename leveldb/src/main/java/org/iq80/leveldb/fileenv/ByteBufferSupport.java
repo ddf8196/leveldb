@@ -19,9 +19,6 @@ package org.iq80.leveldb.fileenv;
 
 import com.google.common.base.Throwables;
 
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
@@ -29,19 +26,29 @@ import java.nio.MappedByteBuffer;
 
 final class ByteBufferSupport
 {
-    private static final MethodHandle INVOKE_CLEANER;
+    private static final Object UNSAFE;
+    private static final Method INVOKE_CLEANER;
+
+    private static final boolean IS_PRE_JAVA9_IMPL;
+    private static final Method GET_CLEANER;
 
     static {
-        MethodHandle invoker;
+        Object unsafe;
+        Method invoker;
+
+        boolean isPreJava9;
+        Method getCleaner;
         try {
             // Java 9 added an invokeCleaner method to Unsafe to work around
             // module visibility issues for code that used to rely on DirectByteBuffer's cleaner()
             Class<?> unsafeClass = Class.forName("sun.misc.Unsafe");
             Field theUnsafe = unsafeClass.getDeclaredField("theUnsafe");
             theUnsafe.setAccessible(true);
-            invoker = MethodHandles.lookup()
-                    .findVirtual(unsafeClass, "invokeCleaner", MethodType.methodType(void.class, ByteBuffer.class))
-                    .bindTo(theUnsafe.get(null));
+
+            unsafe = theUnsafe.get(null);
+            invoker = unsafeClass.getDeclaredMethod("invokeCleaner", ByteBuffer.class);
+            isPreJava9 = false;
+            getCleaner = null;
         }
         catch (Exception e) {
             // fall back to pre-java 9 compatible behavior
@@ -51,20 +58,29 @@ final class ByteBufferSupport
 
                 Method cleanerMethod = directByteBufferClass.getDeclaredMethod("cleaner");
                 cleanerMethod.setAccessible(true);
-                MethodHandle getCleaner = MethodHandles.lookup().unreflect(cleanerMethod);
 
                 Method cleanMethod = cleanerClass.getDeclaredMethod("clean");
-                cleanerMethod.setAccessible(true);
-                MethodHandle clean = MethodHandles.lookup().unreflect(cleanMethod);
+                cleanMethod.setAccessible(true);
 
-                clean = MethodHandles.dropArguments(clean, 1, directByteBufferClass);
-                invoker = MethodHandles.foldArguments(clean, getCleaner);
+                unsafe = null;
+                invoker = cleanMethod;
+                isPreJava9 = true;
+                getCleaner = cleanerMethod;
             }
             catch (Exception e1) {
                 throw new AssertionError(e1);
             }
         }
+
+        UNSAFE = unsafe;
         INVOKE_CLEANER = invoker;
+        IS_PRE_JAVA9_IMPL = isPreJava9;
+        if (isPreJava9) {
+            GET_CLEANER = getCleaner;
+        }
+        else {
+            GET_CLEANER = null;
+        }
     }
 
     private ByteBufferSupport()
@@ -74,7 +90,14 @@ final class ByteBufferSupport
     public static void unmap(MappedByteBuffer buffer)
     {
         try {
-            INVOKE_CLEANER.invoke(buffer);
+            if (!IS_PRE_JAVA9_IMPL) {
+                INVOKE_CLEANER.invoke(UNSAFE, buffer);
+            }
+            else {
+                Object cleaner = GET_CLEANER.invoke(buffer);
+                INVOKE_CLEANER.invoke(cleaner);
+            }
+
         }
         catch (Throwable ignored) {
             throw Throwables.propagate(ignored);

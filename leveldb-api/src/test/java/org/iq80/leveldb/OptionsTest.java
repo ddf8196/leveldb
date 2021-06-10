@@ -33,7 +33,23 @@ public class OptionsTest
     public void testCopy() throws Exception
     {
         MyDBComparator comparator = new MyDBComparator();
-        Logger logger = msg -> {
+        Logger logger = new Logger()
+        {
+            @Override
+            public void close()
+            {
+            }
+
+            @Override
+            public void log(String msg)
+            {
+            }
+
+            @Override
+            public void log(String template, Object... args)
+            {
+                log(String.format(template, args));
+            }
         };
         XFilterPolicy filterPolicy = new XFilterPolicy()
         {

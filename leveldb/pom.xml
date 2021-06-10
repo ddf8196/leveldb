@@ -141,6 +141,7 @@
                         <reuseForks>true</reuseForks>
                         <parallel>${air.test.parallel}</parallel>
                         <threadCount>${air.test.thread-count}</threadCount>
+                        <!--suppress UnresolvedMavenProperty -->
                         <argLine>
                             ${argLine}
                             -Dfile.encoding=${project.build.sourceEncoding}

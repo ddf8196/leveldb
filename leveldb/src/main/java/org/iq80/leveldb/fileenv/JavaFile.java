@@ -19,11 +19,10 @@ package org.iq80.leveldb.fileenv;
 
 import org.iq80.leveldb.env.File;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 public class JavaFile implements File
 {
@@ -114,7 +113,14 @@ public class JavaFile implements File
     public List<File> listFiles()
     {
         java.io.File[] values = file.listFiles();
-        return values == null ? Collections.emptyList() : Stream.of(values).map(JavaFile::new).collect(Collectors.toList());
+        if (values == null) {
+            return Collections.emptyList();
+        }
+        List<File> list = new ArrayList<>(values.length);
+        for (java.io.File val : values) {
+            list.add(new JavaFile(val));
+        }
+        return list;
     }
 
     @Override

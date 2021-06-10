@@ -21,6 +21,7 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.cache.RemovalListener;
+import com.google.common.cache.RemovalNotification;
 import org.iq80.leveldb.DBException;
 import org.iq80.leveldb.Options;
 import org.iq80.leveldb.ReadOptions;
@@ -40,6 +41,7 @@ import org.iq80.leveldb.util.Slice;
 
 import org.iq80.leveldb.env.File;
 import java.io.IOException;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 
 import static java.util.Objects.requireNonNull;
@@ -52,23 +54,28 @@ public class TableCache
     public TableCache(final File databaseDir,
                       int tableCacheSize,
                       final UserComparator userComparator,
-                      final Options options, Env env)
+                      final Options options, final Env env)
     {
         requireNonNull(databaseDir, "databaseName is null");
         blockCache = options.cacheSize() == 0 ? null : LRUCache.createCache((int) options.cacheSize(), new BlockHandleSliceWeigher());
         cache = CacheBuilder.newBuilder()
                 .maximumSize(tableCacheSize)
-                .removalListener((RemovalListener<Long, TableAndFile>) notification -> {
-                    final TableAndFile value = notification.getValue();
-                    if (value != null) {
-                        final Table table = value.getTable();
-                        try {
-                            //end user is required to close resources/iterators
-                            //no need to rely on GC to collect files even for MM Files.
-                            table.close();
-                        }
-                        catch (IOException e) {
-                            throw new DBException(e);
+                .removalListener(new RemovalListener<Long, TableAndFile>()
+                {
+                    @Override
+                    public void onRemoval(RemovalNotification<Long, TableAndFile> notification)
+                    {
+                        final TableAndFile value = notification.getValue();
+                        if (value != null) {
+                            final Table table = value.getTable();
+                            try {
+                                //end user is required to close resources/iterators
+                                //no need to rely on GC to collect files even for MM Files.
+                                table.close();
+                            }
+                            catch (IOException e) {
+                                throw new DBException(e);
+                            }
                         }
                     }
                 })
@@ -158,15 +165,21 @@ public class TableCache
     {
         private final Table table;
 
-        private TableAndFile(File databaseDir, long fileNumber, UserComparator userComparator, Options options, ILRUCache<CacheKey, Slice> blockCache, Env env)
+        private TableAndFile(File databaseDir, long fileNumber, final UserComparator userComparator, final Options options, final ILRUCache<CacheKey, Slice> blockCache, Env env)
                 throws IOException
         {
             final File tableFile = tableFileName(databaseDir, fileNumber);
-            RandomInputFile source = env.newRandomAccessFile(tableFile);
-            table = Closeables.wrapResource(() -> {
-                final FilterPolicy filterPolicy = (FilterPolicy) options.filterPolicy();
-                return new Table(source, userComparator,
-                        options.paranoidChecks(), blockCache, filterPolicy);
+            final RandomInputFile source = env.newRandomAccessFile(tableFile);
+            table = Closeables.wrapResource(new Callable<Table>()
+            {
+                @Override
+                public Table call()
+                        throws Exception
+                {
+                    final FilterPolicy filterPolicy = (FilterPolicy) options.filterPolicy();
+                    return new Table(source, userComparator,
+                            options.paranoidChecks(), blockCache, filterPolicy);
+                }
             }, source);
         }
 

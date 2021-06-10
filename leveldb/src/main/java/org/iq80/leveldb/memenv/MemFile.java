@@ -17,6 +17,7 @@
  */
 package org.iq80.leveldb.memenv;
 
+import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import org.iq80.leveldb.env.File;
 
@@ -112,7 +113,16 @@ class MemFile implements File
     @Override
     public long length()
     {
-        return fs.getFileState(this).map(FileState::length).orElse(0L);
+        return fs.getFileState(this)
+                .transform(new Function<FileState, Long>()
+                {
+                    @Override
+                    public Long apply(FileState input)
+                    {
+                        return input.length();
+                    }
+                })
+                .or(0L);
     }
 
     @Override

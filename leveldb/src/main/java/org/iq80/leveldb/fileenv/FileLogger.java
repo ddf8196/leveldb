@@ -17,6 +17,7 @@
  */
 package org.iq80.leveldb.fileenv;
 
+import com.google.common.base.Supplier;
 import org.iq80.leveldb.Logger;
 import org.iq80.leveldb.util.LogMessageFormatter;
 
@@ -25,8 +26,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintStream;
-import java.time.LocalDateTime;
-import java.util.function.Supplier;
+import java.util.Date;
 
 class FileLogger
         implements Logger
@@ -40,14 +40,22 @@ class FileLogger
         this.formatter = formatter;
     }
 
-    public static Logger createLogger(OutputStream outputStream, Supplier<LocalDateTime> clock)
+    public static Logger createLogger(OutputStream outputStream, Supplier<Date> clock)
     {
         return new FileLogger(new PrintStream(outputStream), new LogMessageFormatter(clock));
     }
 
     public static Logger createFileLogger(File loggerFile) throws IOException
     {
-        return createLogger(new FileOutputStream(loggerFile), LocalDateTime::now);
+        return createLogger(new FileOutputStream(loggerFile),
+                new Supplier<Date>()
+                {
+                    @Override
+                    public Date get()
+                    {
+                        return new Date();
+                    }
+                });
     }
 
     @Override

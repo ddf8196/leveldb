@@ -17,9 +17,10 @@
  */
 package org.iq80.leveldb.iterator;
 
+import com.google.common.base.Function;
+
 import java.util.Comparator;
 import java.util.List;
-import java.util.function.Function;
 
 class SortedCollectionIterator<T, K, V> extends ASeekingIterator<K, V>
 {
